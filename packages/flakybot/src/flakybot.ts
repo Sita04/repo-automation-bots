@@ -66,6 +66,7 @@ function isString(label: Label[] | unknown | string): label is string {
   return typeof label === 'string';
 }
 
+// TODO: flakybot.yaml config.limitIssueNoise 
 function getLabelsForFlakyIssue(config: Config): string[] {
   return [
     'type: bug',
@@ -119,6 +120,7 @@ interface TestCase {
   package?: string;
   testCase?: string;
   passed: boolean;
+  log?: string;
 }
 
 interface TestResults {
@@ -229,6 +231,7 @@ export function flakybot(app: Probot) {
         typedContext.payload.xunitXML,
         'base64'
       ).toString();
+    
       results = flakybot.findTestResults(xml);
     } else {
       if (typedContext.payload.testsFailed === undefined) {
@@ -1026,6 +1029,7 @@ flakybot.findTestResults = (xml: string): TestResults => {
   const obj = xmljs.xml2js(xml, {compact: true}) as xmljs.ElementCompact;
   const failures: TestCase[] = [];
   const passes: TestCase[] = [];
+
   // Python doesn't always have a top-level testsuites element.
   let testsuites = obj['testsuite'];
   if (testsuites === undefined) {
@@ -1069,23 +1073,52 @@ flakybot.findTestResults = (xml: string): TestResults => {
         passes.push({
           package: pkg,
           testCase: testcase['_attributes'].name,
-          passed: true,
+          passed: true
         });
         continue;
       }
+      const log = failure['_text'] || failure['_cdata'] || '';
       // Java puts its test logs in a CDATA element; other languages use _text.
       failures.push({
         package: pkg,
         testCase: testcase['_attributes'].name,
         passed: false,
+        log
       });
     }
   }
+  
+  // Uses new rules engine
+  config.limitIssueNoise && this.limitIssueNoise(failures);
+  
   return {
     passes: deduplicateTests(passes),
     failures: deduplicateTests(failures),
   };
 };
+
+
+// limitIssueNoise: reduces the amount of a certain error to crop up
+function limitIssueNoise(failures: TestCase[]) {   
+  const extConfig = {
+    acceptance: 80,
+    errorCodes: ['Resource exhausted', 'Unavailable']
+  };
+
+  // Rules engine!!!!!
+  failures?.length?.map(f => {
+    // TODO:
+    // f.log.regex check for certain errorCodes
+    // check if within certain acceptance
+    // this.withinAcceptance()
+  });
+}
+
+// withinAcceptance analyzes the past 7 days of issues
+// helper function for limitIssueNoise
+function withinAcceptance(): Boolean {
+  // TODO: Pass in past related issues
+}
 
 // deduplicateTests removes tests that have equivalent formatTestCase values.
 function deduplicateTests(tests: TestCase[]): TestCase[] {
