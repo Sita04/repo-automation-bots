@@ -66,7 +66,7 @@ function isString(label: Label[] | unknown | string): label is string {
   return typeof label === 'string';
 }
 
-// TODO: flakybot.yaml config.limitIssueNoise 
+// TODO: flakybot.yaml config.limitIssueNoise
 function getLabelsForFlakyIssue(config: Config): string[] {
   return [
     'type: bug',
@@ -231,7 +231,7 @@ export function flakybot(app: Probot) {
         typedContext.payload.xunitXML,
         'base64'
       ).toString();
-    
+
       results = flakybot.findTestResults(xml);
     } else {
       if (typedContext.payload.testsFailed === undefined) {
@@ -1073,7 +1073,7 @@ flakybot.findTestResults = (xml: string): TestResults => {
         passes.push({
           package: pkg,
           testCase: testcase['_attributes'].name,
-          passed: true
+          passed: true,
         });
         continue;
       }
@@ -1083,26 +1083,25 @@ flakybot.findTestResults = (xml: string): TestResults => {
         package: pkg,
         testCase: testcase['_attributes'].name,
         passed: false,
-        log
+        log,
       });
     }
   }
-  
+
   // Uses new rules engine
   config.limitIssueNoise && this.limitIssueNoise(failures);
-  
+
   return {
     passes: deduplicateTests(passes),
     failures: deduplicateTests(failures),
   };
 };
 
-
 // limitIssueNoise: reduces the amount of a certain error to crop up
-function limitIssueNoise(failures: TestCase[]) {   
+function limitIssueNoise(failures: TestCase[]) {
   const extConfig = {
     acceptance: 80,
-    errorCodes: ['Resource exhausted', 'Unavailable']
+    errorCodes: ['Resource exhausted', 'Unavailable'],
   };
 
   // Rules engine!!!!!
