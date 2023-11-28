@@ -225,6 +225,7 @@ export function flakybot(app: Probot) {
       return;
     }
 
+    // Get test results list
     let results: TestResults;
     if (typedContext.payload.xunitXML) {
       const xml = Buffer.from(
@@ -269,6 +270,7 @@ export function flakybot(app: Probot) {
       labels: ISSUE_LABEL,
       state: 'all', // Include open and closed issues.
     });
+
     let issues = (await typedContext.octokit.paginate(
       options
     )) as IssuesListForRepoResponseData;
@@ -1088,35 +1090,81 @@ flakybot.findTestResults = (xml: string): TestResults => {
     }
   }
 
-  // Uses new rules engine
-  config.limitIssueNoise && this.limitIssueNoise(failures);
+  let filterFailures = failures;
+
+  // Check "limitIssueNoise" feature flag
+  if (config.limitIssueNoise) {
+    filterFailures = this.limitIssueNoise(failures);
+  }
 
   return {
     passes: deduplicateTests(passes),
-    failures: deduplicateTests(failures),
+    failures: deduplicateTests(filteredFailures),
   };
 };
 
+// TODO Ext flakybot work
 // limitIssueNoise: reduces the amount of a certain error to crop up
-function limitIssueNoise(failures: TestCase[]) {
+function limitIssueNoise(failures: TestCase[]): TestCase[] {
+  // TODO Put config globally where it can be retrieved.
+  // Would placing this in flakybot.yaml be overloading the intended usage of the yaml file?
   const extConfig = {
     acceptance: 80,
     errorCodes: ['Resource exhausted', 'Unavailable'],
   };
 
-  // Rules engine!!!!!
-  failures?.length?.map(f => {
-    // TODO:
-    // f.log.regex check for certain errorCodes
-    // check if within certain acceptance
-    // this.withinAcceptance()
+  // TODO: Refactor for better performance
+  failures.filter(failure => {
+    let withinAcceptableRange = true;
+
+    // Check through errorCode list if any failures match
+    extConfig.errorCodes.forEach(code => {
+      const containsErrorToSupress = new RegExp(code).test(failure?.log);
+      // If the failure contains the errors we are supressing,
+      // check for how many times they have been raised before
+      if (containsErrorToSupress) {
+        withinAcceptableRange =
+          extConfig.acceptance >= this.occurancePercentage(code);
+        break;
+      }
+    });
+
+    return withinAcceptableRange;
   });
 }
 
 // withinAcceptance analyzes the past 7 days of issues
 // helper function for limitIssueNoise
-function withinAcceptance(): Boolean {
-  // TODO: Pass in past related issues
+function occurancePercentage(code: String): Number {
+  // TODO use octokit issues
+  /*const options = typedContext.octokit.issues.listForRepo.endpoint.merge({
+    owner,
+    repo,
+    per_page: 100,
+    labels: ISSUE_LABEL,
+    state: 'open',
+  });
+
+  let issues = (await typedContext.octokit.paginate(
+    options
+  )) as IssuesListForRepoResponseData;
+
+  // If we deduplicate any issues, re-download the issues.
+  if (
+    await flakybot.deduplicateIssues(
+      results,
+      issues,
+      typedContext,
+      owner,
+      repo,
+      logger
+    )
+  ) {
+    issues = await context.octokit.paginate(options);
+  }*/
+
+  // TODO update with actual occurrance %
+  return Math.floor(80);
 }
 
 // deduplicateTests removes tests that have equivalent formatTestCase values.
