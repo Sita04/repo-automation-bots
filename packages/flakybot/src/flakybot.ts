@@ -1114,54 +1114,92 @@ function limitIssueNoise(failures: TestCase[]): TestCase[] {
   };
 
   // TODO: Refactor for better performance
+  
+  /***
+   *
+   * If issue doesn't exist
+   * --- go ahead and let it create issue and continue
+   *
+   * If issue does exist
+   * --- check number of comments occurring (occurance percentage or #)
+   * --- if within acceptable range, let flakybot continue to do normal function adding comments
+   * --- else changing priority to highest
+   *
+   *
+   *
+   *
+   *
+   *
+   */
+
   failures.filter(failure => {
     let withinAcceptableRange = true;
+  
+    const existingIssue = this.getExistingIssue(failure);
+   
+    // If the issue does exist, then check for the number of times
+    // it has occurred (using occurrancePercentage())
+    // else then allow the issue to be created (as the initial marker)
+    if(existingIssue) {
 
+      // Checking out comment as issues are 
+      const options = context.octokit.issues.listComments.endpoint.merge({
+        owner,
+        repo,
+        issue_number: existingIssue.number,
+      });
+      
+      const comments = (await context.octokit.paginate(
+        options
+      )) as IssuesListCommentsResponseData;
+    }
+      
+
+    /*
     // Check through errorCode list if any failures match
-    extConfig.errorCodes.forEach(code => {
-      const containsErrorToSupress = new RegExp(code).test(failure?.log);
-      // If the failure contains the errors we are supressing,
-      // check for how many times they have been raised before
-      if (containsErrorToSupress) {
-        withinAcceptableRange =
-          extConfig.acceptance >= this.occurancePercentage(code);
-        break;
-      }
-    });
-
+      extConfig.errorCodes.forEach(code => {
+        const containsErrorToSupress = flakybot.containsBuildFailure(
+          //new RegExp(code).test(failure?.log);
+        // If the failure contains the errors we are supressing,
+        // check for how many times they have been raised before
+        if (containsErrorToSupress) {
+          withinAcceptableRange =
+            extConfig.acceptance >= this.occurancePercentage(code);
+        }
+      });
+    */
     return withinAcceptableRange;
   });
 }
 
-// withinAcceptance analyzes the past 7 days of issues
-// helper function for limitIssueNoise
-function occurancePercentage(code: String): Number {
-  // TODO use octokit issues
-  /*const options = typedContext.octokit.issues.listForRepo.endpoint.merge({
+// Last seven days of existing issue
+function getExistingIssue(failure: TestCase): IssuesListForRepoResponseData {
+  let doesExist = false;
+  // Note: We are allowing the first issue to be floated up
+  // to be a marker for us to check if the same issue has occurred 
+  // in the past 7 days
+  //
+  // TODO remember to pass in owner, repo, etc
+  const options = typedContext.octokit.issues.listForRepo.endpoint.merge({
     owner,
     repo,
     per_page: 100,
     labels: ISSUE_LABEL,
     state: 'open',
+    created: 'YYYY-MM-DD', 
   });
 
   let issues = (await typedContext.octokit.paginate(
     options
   )) as IssuesListForRepoResponseData;
 
-  // If we deduplicate any issues, re-download the issues.
-  if (
-    await flakybot.deduplicateIssues(
-      results,
-      issues,
-      typedContext,
-      owner,
-      repo,
-      logger
-    )
-  ) {
-    issues = await context.octokit.paginate(options);
-  }*/
+  return flakybot.findExistingIssue(issues);
+}
+
+// withinAcceptance analyzes the past 7 days of issues
+// helper function for limitIssueNoise
+function occurancePercentage(code: String): Number {
+  // TODO use octokit issues
 
   // TODO update with actual occurrance %
   return Math.floor(80);
